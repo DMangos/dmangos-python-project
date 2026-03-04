@@ -23,7 +23,7 @@ jobs:
       with:
         context: .
         push: true
-        tags: ${{ secrets.REGISTRY_USER }}/demo-nodejs-app-gitbub:v1
+        tags: ${{ secrets.REGISTRY_USER }}/demo-python-app-gitbub:v1
         
   deploy:
     runs-on: ubuntu-latest
