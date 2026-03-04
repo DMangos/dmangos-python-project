@@ -1,0 +1,59 @@
+
+name: Docker Image CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4 
+    
+    - name: Login to Docker Hub
+      uses: docker/login-action@v3
+      with:
+          username: ${{ secrets.REGISTRY_USER }}
+          password: ${{ secrets.REGISTRY_PAT }}
+    - name: Build and push to Dockerhub
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        push: true
+        tags: ${{ secrets.REGISTRY_USER }}/demo-nodejs-app-gitbub:v1
+        
+  deploy:
+    runs-on: ubuntu-latest
+    needs:   build-and-push  # Ensures this only runs if the 'build' job passes
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Deploy to AWS via SSH
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ secrets.AWS_HOST }}
+        username: ${{ secrets.AWS_USER }}
+        key: ${{ secrets.AWS_SSH_KEY }}
+        script: |
+          # 1. Login to Docker Hub on the server
+          echo "${{ secrets.REGISTRY_PAT }}" | docker login -u ${{ secrets.REGISTRY_USER }} --password-stdin
+          
+          # 2. Pull the latest image
+          docker pull ${{ secrets.REGISTRY_USER }}/demo-python-app-gitbub:v1
+          
+          # 3. Stop and remove the old container if it exists
+          docker stop my-python-app || true
+          docker rm my-python-app || true
+          
+          # 4. Run the new container
+          # Adjust the -p (port) mapping to match your app (e.g., 5001:5000)
+          docker run -d \
+            --name my-python-app \
+            -p 5001:5000 \
+            -e APP_STATIC_DIR="/app/static" \
+            ${{ secrets.REGISTRY_USER }}/demo-python-app-gitbub:v1  
+      
