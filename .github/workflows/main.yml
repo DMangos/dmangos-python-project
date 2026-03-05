@@ -7,6 +7,12 @@ on:
   pull_request:
     branches: [ "main" ]
 
+permissions:
+  contents: read      # Required to check out the code
+  security-events: write # Required to upload the scan results to the Security tab
+  actions: read       # Required for some internal API calls
+
+  
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
@@ -24,10 +30,32 @@ jobs:
         context: .
         push: true
         tags: ${{ secrets.REGISTRY_USER }}/demo-python-app-gitbub:v1
+
+  trivy-scan:
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    steps:
+    - name: Run Trivy Scan
+      uses: aquasecurity/trivy-action@0.34.2
+      with: 
+        image-ref: "${{ secrets.REGISTRY_USER }}/demo-python-app-gitbub:v1"
+        format: "sarif"
+        output: "trivy-results.sarif"
+        severity: "CRITICAL,HIGH"
+        exit-code: "1"
+      env:
+        TRIVY_USERNAME: ${{ secrets.REGISTRY_USER }}
+        TRIVY_PASSWORD: ${{ secrets.REGISTRY_PAT }}
+    
+    - name: Upload results to GitHub Security tab
+      uses: github/codeql-action/upload-sarif@v4
+      with:
+        sarif_file: "trivy-results.sarif"
+
         
   deploy:
     runs-on: ubuntu-latest
-    needs:   build-and-push  # Ensures this only runs if the 'build' job passes
+    needs:   trivy-scan  # Ensures this only runs if the 'trivy-scan' job passes
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
